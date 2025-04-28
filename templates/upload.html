@@ -1,0 +1,1439 @@
+<!-- templates/upload.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Learning Assistant</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4361ee;
+            --primary-dark: #3a56d4;
+            --secondary: #f72585;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --success: #06d6a0;
+            --warning: #ffd166;
+            --danger: #ef476f;
+            --gray-100: #f8f9fa;
+            --gray-200: #e9ecef;
+            --gray-300: #dee2e6;
+            --gray-400: #ced4da;
+            --gray-500: #adb5bd;
+            --gray-800: #343a40;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--dark);
+            background-color: #f5f7fa;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--gray-300);
+        }
+
+        h1, h2, h3 {
+            color: var(--primary-dark);
+            margin-bottom: 0.75rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        h2 {
+            font-size: 1.75rem;
+            padding-top: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--gray-200);
+            margin-top: 1.5rem;
+        }
+
+        h3 {
+            font-size: 1.25rem;
+            margin-top: 1rem;
+        }
+
+        p {
+            margin-bottom: 1rem;
+            color: var(--gray-800);
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        .upload-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem 2rem;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: var(--primary);
+            margin-bottom: 1.5rem;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            margin-bottom: 1.5rem;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .file-input-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 12px 20px;
+            background-color: white;
+            color: var(--gray-800);
+            border: 2px dashed var(--primary);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .file-input-label:hover {
+            background-color: var(--gray-100);
+            border-color: var(--primary-dark);
+        }
+
+        .file-input-label i {
+            margin-right: 8px;
+            color: var(--primary);
+        }
+
+        #videoInput {
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-name {
+            margin-top: 8px;
+            font-size: 0.9rem;
+            color: var(--gray-500);
+            text-align: center;
+            min-height: 20px;
+        }
+
+        .btn {
+            display: inline-block;
+            font-weight: 500;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: middle;
+            user-select: none;
+            padding: 12px 24px;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            font-size: 1rem;
+            margin: 0.5rem;
+            border: none;
+        }
+
+        .btn-primary {
+            color: white;
+            background-color: var(--primary);
+            box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            box-shadow: 0 6px 16px rgba(67, 97, 238, 0.4);
+        }
+
+        .btn-primary:disabled {
+            background-color: var(--gray-400);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            color: white;
+            background-color: var(--secondary);
+            box-shadow: 0 4px 12px rgba(247, 37, 133, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background-color: #e01f77;
+            box-shadow: 0 6px 16px rgba(247, 37, 133, 0.4);
+        }
+
+        .btn-secondary:disabled {
+            background-color: var(--gray-400);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .loading {
+            display: none;
+            margin: 2rem 0;
+            padding: 2rem;
+            background-color: white;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .progress-container {
+            width: 100%;
+            background-color: var(--gray-200);
+            border-radius: 50px;
+            margin: 1.5rem 0;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 12px;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+            border-radius: 50px;
+            transition: width 0.5s ease;
+            text-align: center;
+            color: white;
+            font-size: 0;
+            line-height: 12px;
+        }
+
+        .processing-steps {
+            text-align: left;
+            margin: 1.5rem auto;
+            max-width: 500px;
+        }
+
+        .processing-step {
+            margin: 12px 0;
+            padding: 8px 16px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .processing-step i {
+            margin-right: 12px;
+            font-size: 1.2rem;
+        }
+
+        .step-pending {
+            color: var(--gray-500);
+            background-color: var(--gray-100);
+        }
+
+        .step-active {
+            color: white;
+            background-color: var(--primary);
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(67, 97, 238, 0.3);
+        }
+
+        .step-complete {
+            color: white;
+            background-color: var(--success);
+            font-weight: 500;
+        }
+
+        .error {
+            display: none;
+            color: white;
+            padding: 15px;
+            background-color: var(--danger);
+            margin: 1rem 0;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(239, 71, 111, 0.2);
+            animation: shake 0.5s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+
+        .content-section {
+            background-color: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .transcript, .summary {
+            background-color: var(--gray-100);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--gray-300);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .topic-summary {
+            background-color: white;
+            padding: 0;
+            border-radius: 8px;
+            margin: 1.5rem 0;
+        }
+
+        .topic {
+            margin-bottom: 1.5rem;
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            border-left: 4px solid var(--primary);
+        }
+
+        .topic:last-child {
+            margin-bottom: 0;
+        }
+
+        .topic h3 {
+            margin-top: 0;
+            color: var(--primary-dark);
+        }
+
+        .key-points {
+            margin-top: 1rem;
+            background-color: var(--gray-100);
+            padding: 1rem;
+            border-radius: 8px;
+        }
+
+        .key-points ul {
+            padding-left: 1.5rem;
+        }
+
+        .key-points li {
+            margin-bottom: 8px;
+            position: relative;
+        }
+
+        .key-points li::before {
+            content: "•";
+            color: var(--primary);
+            font-weight: bold;
+            display: inline-block;
+            width: 1em;
+            margin-left: -1em;
+        }
+
+        .question {
+            margin-bottom: 1.5rem;
+            padding: 1.5rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .question:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .question h3 {
+            margin-top: 0;
+            color: var(--primary-dark);
+            border-bottom: 1px solid var(--gray-200);
+            padding-bottom: 0.75rem;
+        }
+
+        .question label {
+            display: block;
+            margin: 10px 0;
+            padding: 10px 15px;
+            background-color: var(--gray-100);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .question label:hover {
+            background-color: var(--gray-200);
+        }
+
+        .question input[type="radio"] {
+            margin-right: 10px;
+        }
+
+        .answer {
+            color: white;
+            font-weight: 500;
+            margin-top: 1rem;
+            padding: 10px 15px;
+            background-color: var(--success);
+            border-radius: 6px;
+            display: none;
+        }
+
+        .download-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        .pdf-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 24px;
+            background-color: var(--secondary);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(247, 37, 133, 0.3);
+        }
+
+        .pdf-btn:hover {
+            background-color: #e01f77;
+            box-shadow: 0 6px 16px rgba(247, 37, 133, 0.4);
+        }
+
+        .pdf-btn:disabled {
+            background-color: var(--gray-400);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .pdf-btn i {
+            margin-right: 8px;
+        }
+
+        .download-progress {
+            width: 100%;
+            max-width: 400px;
+            display: none;
+            margin-top: 1.5rem;
+        }
+
+        /* Define a class for disabled buttons */
+        .btn-disabled {
+            background-color: var(--gray-400) !important;
+            cursor: not-allowed !important;
+            box-shadow: none !important;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            body {
+                padding: 15px;
+            }
+
+            .card, .content-section {
+                padding: 1.25rem;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            h2 {
+                font-size: 1.5rem;
+            }
+
+            .btn {
+                padding: 10px 20px;
+            }
+        }
+        /* Chat component styles */
+.chat-container {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    width: 350px;
+    max-width: 90vw;
+    height: 500px;
+    max-height: 70vh;
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.chat-container.minimized {
+    height: 50px;
+}
+
+.chat-header {
+    padding: 12px 16px;
+    background-color: var(--primary);
+    color: white;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.chat-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: white;
+}
+
+.chat-header i {
+    margin-right: 8px;
+}
+
+.minimize-chat {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.chat-input-container {
+    display: flex;
+    padding: 12px;
+    border-top: 1px solid var(--gray-200);
+}
+
+.chat-input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: 20px;
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.chat-input:focus {
+    border-color: var(--primary);
+}
+
+.chat-send {
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.chat-send:hover {
+    background-color: var(--primary-dark);
+}
+
+.chat-message {
+    display: flex;
+    gap: 10px;
+    max-width: 85%;
+}
+
+.bot-message {
+    align-self: flex-start;
+}
+
+.user-message {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.message-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.bot-message .message-avatar {
+    background-color: var(--primary);
+    color: white;
+}
+
+.user-message .message-avatar {
+    background-color: var(--secondary);
+    color: white;
+}
+
+.message-content {
+    background-color: var(--gray-100);
+    padding: 10px 14px;
+    border-radius: 18px;
+    font-size: 0.9rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.bot-message .message-content {
+    border-top-left-radius: 4px;
+    background-color: var(--gray-100);
+}
+
+.user-message .message-content {
+    border-top-right-radius: 4px;
+    background-color: var(--primary);
+    color: white;
+}
+
+.toggle-chat {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: var(--primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+    z-index: 999;
+}
+
+.toggle-chat:hover {
+    background-color: var(--primary-dark);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(67, 97, 238, 0.4);
+}
+
+.chat-typing {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    border-radius: 12px;
+    background-color: var(--gray-100);
+    font-size: 0.8rem;
+    color: var(--gray-500);
+    align-self: flex-start;
+}
+
+.typing-dot {
+    width: 6px;
+    height: 6px;
+    background-color: var(--gray-500);
+    border-radius: 50%;
+    animation: typing-dot 1.4s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typing-dot {
+    0%, 60%, 100% {
+        transform: translateY(0);
+    }
+    30% {
+        transform: translateY(-4px);
+    }
+}
+
+/* Handle minimization */
+.chat-container.minimized .chat-messages,
+.chat-container.minimized .chat-input-container {
+    display: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .chat-container {
+        width: 300px;
+        bottom: 70px;
+    }
+}
+
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Video Learning Assistant</h1>
+        <p>Upload an educational video to generate a transcript, summary, and quiz to enhance your learning experience.</p>
+    </header>
+
+    <div class="upload-section">
+        <div class="upload-icon">
+            <i class="fas fa-cloud-upload-alt"></i>
+        </div>
+        <h2>Upload Your Video</h2>
+        <p>Select an educational video file to analyze</p>
+
+        <div class="file-input-wrapper">
+            <label for="videoInput" class="file-input-label">
+                <i class="fas fa-file-video"></i>
+                Choose Video File
+            </label>
+            <input type="file" id="videoInput" accept="video/*">
+            <div id="fileName" class="file-name"></div>
+        </div>
+
+        <button id="analyzeBtn" class="btn btn-primary btn-disabled" disabled>
+            <i class="fas fa-magic"></i> Analyze Video
+        </button>
+    </div>
+
+    <div id="loading" class="loading">
+        <h3>Processing Your Video</h3>
+        <p>This may take a few minutes depending on the video length. Please don't close the browser.</p>
+
+        <div class="progress-container">
+            <div id="progressBar" class="progress-bar">0%</div>
+        </div>
+
+        <div class="processing-steps">
+            <div id="step1" class="processing-step step-pending">
+                <i class="fas fa-upload"></i> Uploading video...
+            </div>
+            <div id="step2" class="processing-step step-pending">
+                <i class="fas fa-volume-up"></i> Extracting audio...
+            </div>
+            <div id="step3" class="processing-step step-pending">
+                <i class="fas fa-language"></i> Transcribing audio...
+            </div>
+            <div id="step4" class="processing-step step-pending">
+                <i class="fas fa-align-left"></i> Generating summary...
+            </div>
+            <div id="step5" class="processing-step step-pending">
+                <i class="fas fa-question-circle"></i> Creating quiz questions...
+            </div>
+        </div>
+    </div>
+
+    <div id="error" class="error"></div>
+    <div id="results"></div>
+    <div id="chatContainer" class="chat-container" style="display: none;">
+    <div class="chat-header">
+        <h3><i class="fas fa-robot"></i> Learning Assistant</h3>
+        <button id="minimizeChat" class="minimize-chat"><i class="fas fa-minus"></i></button>
+    </div>
+    <div id="chatMessages" class="chat-messages">
+        <div class="chat-message bot-message">
+            <div class="message-avatar">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div class="message-content">
+                Hello! I'm your learning assistant. Ask me any questions about the video content you've uploaded.
+            </div>
+        </div>
+    </div>
+    <div class="chat-input-container">
+        <input type="text" id="chatInput" class="chat-input" placeholder="Ask a question about the video...">
+        <button id="sendChatBtn" class="chat-send">
+            <i class="fas fa-paper-plane"></i>
+        </button>
+    </div>
+</div>
+
+<button id="toggleChatBtn" class="toggle-chat" style="display: none;">
+    <i class="fas fa-comment-dots"></i>
+</button>
+    <script>
+    // Store the response data globally
+    let responseData = null;
+
+    // Get the elements once the DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // Ensure all elements are available before using them
+        const videoInput = document.getElementById('videoInput');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
+        const results = document.getElementById('results');
+        const progressBar = document.getElementById('progressBar');
+        const fileName = document.getElementById('fileName');
+        const processingSteps = [
+            document.getElementById('step1'),
+            document.getElementById('step2'),
+            document.getElementById('step3'),
+            document.getElementById('step4'),
+            document.getElementById('step5')
+        ];
+
+        // Chat elements
+        const toggleChatBtn = document.getElementById('toggleChatBtn');
+        const chatContainer = document.getElementById('chatContainer');
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const sendChatBtn = document.getElementById('sendChatBtn');
+        const minimizeChat = document.getElementById('minimizeChat');
+        const chatHeader = document.querySelector('.chat-header');
+
+        console.log('DOM loaded, setting up event listeners');
+
+        // Event listener for file selection
+        videoInput.addEventListener('change', function() {
+            console.log('File input changed', videoInput.files);
+
+            if (videoInput.files && videoInput.files.length > 0) {
+                analyzeBtn.disabled = false;
+                analyzeBtn.classList.remove('btn-disabled');
+                fileName.textContent = videoInput.files[0].name;
+                console.log('File selected:', videoInput.files[0].name, ', button enabled');
+            } else {
+                analyzeBtn.disabled = true;
+                analyzeBtn.classList.add('btn-disabled');
+                fileName.textContent = '';
+                console.log('No file selected, button disabled');
+            }
+        });
+
+        // Function to update progress
+        function updateProgress(step, percent) {
+            // Update progress bar
+            progressBar.style.width = percent + '%';
+            progressBar.textContent = percent + '%';
+
+            // Update step indicators
+            for (let i = 0; i < processingSteps.length; i++) {
+                if (i < step - 1) {
+                    processingSteps[i].className = 'processing-step step-complete';
+                    // Replace any icon with check icon for completed steps
+                    processingSteps[i].innerHTML = processingSteps[i].innerHTML.replace(/fa-[a-z-]+/, 'fa-check');
+                } else if (i === step - 1) {
+                    processingSteps[i].className = 'processing-step step-active';
+                } else {
+                    processingSteps[i].className = 'processing-step step-pending';
+                }
+            }
+        }
+
+        // Function to show errors
+        function showError(message) {
+            error.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
+            error.style.display = 'block';
+
+            // Hide error after 5 seconds
+            setTimeout(() => {
+                error.style.display = 'none';
+            }, 5000);
+        }
+
+        // Event listener for analyze button
+        analyzeBtn.addEventListener('click', async function() {
+            console.log('Analyze button clicked');
+            const file = videoInput.files[0];
+            if (!file) {
+                console.log('No file selected');
+                showError('Please select a video file first');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('video', file);
+            console.log('FormData created with file:', file.name);
+
+            // Reset UI
+            error.style.display = 'none';
+            results.innerHTML = '';
+            loading.style.display = 'block';
+            analyzeBtn.disabled = true;
+            analyzeBtn.classList.add('btn-disabled');
+
+            // Start progress simulation
+            updateProgress(1, 5);
+            console.log('Starting video analysis');
+
+            try {
+                // Upload file
+                let uploadComplete = false;
+                setTimeout(() => {
+                    if (!uploadComplete) updateProgress(2, 30);
+                }, 2000);
+
+                console.log('Sending file to server at: /analyze');
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                console.log('Response status:', response.status);
+
+                uploadComplete = true;
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server returned ${response.status}: ${errorText}`);
+                }
+
+                // Start simulating processing steps
+                updateProgress(3, 50);
+
+                setTimeout(() => updateProgress(4, 70), 1500);
+                setTimeout(() => updateProgress(5, 90), 3000);
+
+                const data = await response.json();
+                console.log('Response parsed as JSON:', data);
+
+                // Complete progress
+                updateProgress(5, 100);
+
+                setTimeout(() => {
+                    loading.style.display = 'none';
+
+                    if (data.error) {
+                        console.error('Error from server:', data.error);
+                        showError(data.error);
+                        analyzeBtn.disabled = false;
+                        analyzeBtn.classList.remove('btn-disabled');
+                        return;
+                    }
+
+                    console.log('Displaying results');
+                    displayResults(data);
+
+                    // Show chat button when results are displayed
+                    toggleChatBtn.style.display = 'flex';
+                }, 1000);
+            } catch (err) {
+                console.error('Error during analysis:', err);
+                loading.style.display = 'none';
+                showError('Error: ' + err.message);
+                analyzeBtn.disabled = false;
+                analyzeBtn.classList.remove('btn-disabled');
+            }
+        });
+
+        // Function to display results
+        function displayResults(data) {
+            // Store the response data for PDF generation and chat
+            responseData = data;
+
+            let html = `
+            <div class="card">
+                <h2><i class="fas fa-file-alt"></i> Transcript</h2>
+                <div class="transcript">${data.transcript}</div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fas fa-comment-alt"></i> Summary</h2>
+                <div class="summary">${data.summary}</div>
+            </div>`;
+
+            // Add topic-wise summary section
+            if (data.topic_summary && data.topic_summary.topics) {
+                html += `
+                <div class="card">
+                    <h2><i class="fas fa-list-alt"></i> Topic Summary</h2>
+                    <h3>${data.topic_summary.title || 'Content Summary'}</h3>
+                    <div class="topic-summary" id="topicsContainer">`;
+
+                data.topic_summary.topics.forEach((topic, i) => {
+                    html += `
+                    <div class="topic">
+                        <h3>${i+1}. ${topic.heading}</h3>
+                        <p>${topic.summary}</p>
+                        <div class="key-points">
+                            <strong>Key Points:</strong>
+                            <ul>`;
+
+                    topic.key_points.forEach(point => {
+                        html += `<li>${point}</li>`;
+                    });
+
+                    html += `
+                            </ul>
+                        </div>
+                    </div>`;
+                });
+
+                html += `
+                    </div>
+
+                    <div class="download-section">
+                        <button id="generatePdfBtn" class="pdf-btn">
+                            <i class="fas fa-file-pdf"></i> Generate PDF Summary
+                        </button>
+                        <div id="downloadProgress" class="download-progress">
+                            <p>Generating PDF...</p>
+                            <div class="progress-container">
+                                <div id="pdfProgressBar" class="progress-bar">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            // Add quiz section
+            html += `<div class="card">
+                <h2><i class="fas fa-question-circle"></i> Quiz</h2>`;
+
+            try {
+                const quiz = JSON.parse(data.quiz);
+
+                if (!quiz.quiz || quiz.quiz.length === 0) {
+                    html += `<p>No quiz questions available.</p>`;
+                } else {
+                    quiz.quiz.forEach((q, i) => {
+                        html += `
+                        <div class="question">
+                            <h3>Question ${i+1}: ${q.question}</h3>
+                            ${q.options.map((o, j) => `
+                                <label>
+                                    <input type="radio" name="q${i}" value="${j}">
+                                    ${o}
+                                </label>
+                            `).join('')}
+                            <button onclick="showAnswer(${i}, ${q.answer})" class="btn btn-secondary">Show Answer</button>
+                            <div id="answer${i}" class="answer"></div>
+                        </div>`;
+                    });
+                }
+            } catch(e) {
+                console.error('Error parsing quiz data:', e);
+                html += `<p class="error">Error parsing quiz: ${e.message}</p>`;
+            }
+
+            html += `</div>`;
+
+            results.innerHTML = html;
+            analyzeBtn.disabled = false;
+            analyzeBtn.classList.remove('btn-disabled');
+
+            // Add event listener for PDF generation
+            const generatePdfBtn = document.getElementById('generatePdfBtn');
+            if (generatePdfBtn) {
+                generatePdfBtn.addEventListener('click', generateAndDownloadPDF);
+            }
+        }
+
+        // Chat functionality
+
+        // Toggle chat visibility
+        toggleChatBtn.addEventListener('click', function() {
+            chatContainer.style.display = 'flex';
+            toggleChatBtn.style.display = 'none';
+
+            // If chat was minimized, restore it
+            chatContainer.classList.remove('minimized');
+
+            // Focus the input field
+            chatInput.focus();
+        });
+
+        // Minimize or restore chat
+        minimizeChat.addEventListener('click', function() {
+            chatContainer.classList.toggle('minimized');
+        });
+
+        chatHeader.addEventListener('click', function(e) {
+            // Only toggle if clicking on the header (not the minimize button)
+            if (e.target !== minimizeChat && !minimizeChat.contains(e.target)) {
+                chatContainer.classList.toggle('minimized');
+            }
+        });
+
+        // Close chat
+        function closeChat() {
+            chatContainer.style.display = 'none';
+            toggleChatBtn.style.display = 'flex';
+        }
+
+        // Add user message to chat
+        function addUserMessage(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('chat-message', 'user-message');
+
+            messageDiv.innerHTML = `
+                <div class="message-avatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="message-content">
+                    ${message}
+                </div>
+            `;
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Add bot message to chat
+        function addBotMessage(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('chat-message', 'bot-message');
+
+            messageDiv.innerHTML = `
+                <div class="message-avatar">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="message-content">
+                    ${message}
+                </div>
+            `;
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Show typing indicator
+        function showTypingIndicator() {
+            const typingDiv = document.createElement('div');
+            typingDiv.classList.add('chat-typing');
+            typingDiv.id = 'typingIndicator';
+
+            typingDiv.innerHTML = `
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            `;
+
+            chatMessages.appendChild(typingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Remove typing indicator
+        function removeTypingIndicator() {
+            const typingIndicator = document.getElementById('typingIndicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
+            }
+        }
+
+        // Process user message and generate response
+        async function processUserMessage(message) {
+            // Add user message to chat
+            addUserMessage(message);
+
+            // Show typing indicator
+            showTypingIndicator();
+
+            try {
+                // Prepare the query data
+                const queryData = {
+                    query: message,
+                    context: {
+                        transcript: responseData.transcript || "",
+                        summary: responseData.summary || "",
+                        topic_summary: responseData.topic_summary || {},
+                        quiz: responseData.quiz || "{}"
+                    }
+                };
+
+                // Send request to the server
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(queryData)
+                });
+
+                // Remove typing indicator
+                removeTypingIndicator();
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server returned ${response.status}: ${errorText}`);
+                }
+
+                const result = await response.json();
+
+                // Add bot response to chat
+                if (result.error) {
+                    addBotMessage(`I'm sorry, I encountered an error: ${result.error}`);
+                } else {
+                    addBotMessage(result.response);
+                }
+            } catch (err) {
+                // Remove typing indicator
+                removeTypingIndicator();
+
+                console.error('Error processing message:', err);
+
+                // If no server endpoint exists yet, use a fallback response based on the content
+                let fallbackResponse = generateFallbackResponse(message);
+                addBotMessage(fallbackResponse);
+            }
+        }
+
+        // Generate a fallback response based on the content (until backend is implemented)
+        function generateFallbackResponse(message) {
+            const transcript = responseData?.transcript || '';
+            const summary = responseData?.summary || '';
+
+            // Very simple response generation - in real implementation, this would use the backend
+            const messageLower = message.toLowerCase();
+
+            // Simple keyword matching
+            if (messageLower.includes('summary') || messageLower.includes('overview')) {
+                return `Here's a quick summary of the video content: ${summary.substring(0, 150)}...`;
+            } else if (messageLower.includes('topic') || messageLower.includes('main point')) {
+                const topics = responseData?.topic_summary?.topics || [];
+                if (topics.length > 0) {
+                    return `The main topics covered in this video are: ${topics.map(t => t.heading).join(', ')}`;
+                }
+            } else if (messageLower.includes('quiz') || messageLower.includes('question')) {
+                return "You can find a quiz based on the video content in the Quiz section above. It will help test your understanding of the material.";
+            } else if (messageLower.includes('download') || messageLower.includes('pdf')) {
+                return "You can download a PDF summary of this video by clicking the 'Generate PDF Summary' button in the Topic Summary section.";
+            } else if (messageLower.includes('hello') || messageLower.includes('hi ')) {
+                return "Hello! How can I help you understand the video content better?";
+            } else if (messageLower.includes('thank')) {
+                return "You're welcome! If you have any more questions about the video, feel free to ask.";
+            }
+
+            // If no keywords match, search for relevant content
+            // Here we'd normally use a more sophisticated search, but for the fallback:
+            const words = messageLower.split(/\W+/).filter(w => w.length > 3);
+
+            let relevantContent = '';
+            for (const word of words) {
+                if (word.length < 4) continue; // Skip short words
+
+                const regex = new RegExp(`[^.!?]*${word}[^.!?]*[.!?]`, 'i');
+                const match = transcript.match(regex);
+
+                if (match && match[0]) {
+                    relevantContent = match[0].trim();
+                    break;
+                }
+            }
+
+            if (relevantContent) {
+                return `Based on the video content: "${relevantContent}"`;
+            }
+
+            // Default response if nothing matches
+            return "I'm sorry, I don't have specific information about that from the video. Could you try asking in a different way or ask about another aspect of the content?";
+        }
+
+        // Send message when clicking the send button
+        sendChatBtn.addEventListener('click', function() {
+            const message = chatInput.value.trim();
+
+            if (message) {
+                processUserMessage(message);
+                chatInput.value = '';
+            }
+        });
+
+        // Send message when pressing Enter
+        chatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                const message = chatInput.value.trim();
+
+                if (message) {
+                    processUserMessage(message);
+                    chatInput.value = '';
+                }
+            }
+        });
+    });
+
+    // Function to show answers (must be defined outside the DOMContentLoaded event)
+    function showAnswer(questionIndex, answerIndex) {
+        const answerDiv = document.getElementById(`answer${questionIndex}`);
+        if (answerDiv) {
+            answerDiv.innerHTML = `<i class="fas fa-check-circle"></i> Correct Answer: Option ${answerIndex + 1}`;
+            answerDiv.style.display = 'block';
+        }
+    }
+
+    // Function to generate and download PDF (must be defined outside the DOMContentLoaded event)
+    async function generateAndDownloadPDF() {
+        const error = document.getElementById('error');
+
+        if (!responseData) {
+            console.error('No data available for PDF generation');
+            if (error) {
+                error.innerHTML = `<i class="fas fa-exclamation-circle"></i> No data available for PDF generation`;
+                error.style.display = 'block';
+                setTimeout(() => { error.style.display = 'none'; }, 5000);
+            }
+            return;
+        }
+
+        const generatePdfBtn = document.getElementById('generatePdfBtn');
+        const downloadProgress = document.getElementById('downloadProgress');
+        const pdfProgressBar = document.getElementById('pdfProgressBar');
+
+        if (!generatePdfBtn || !downloadProgress || !pdfProgressBar) {
+            console.error('Could not find PDF generation elements');
+            return;
+        }
+
+        try {
+            // Show progress
+            generatePdfBtn.disabled = true;
+            downloadProgress.style.display = 'block';
+            pdfProgressBar.style.width = '10%';
+            pdfProgressBar.textContent = '10%';
+
+            // Prepare data for PDF generation
+            const pdfData = {
+                transcript: responseData.transcript || "",
+                topic_summary: responseData.topic_summary || {
+                    title: "Video Summary",
+                    topics: [{
+                        heading: "Content Summary",
+                        summary: responseData.transcript ? (responseData.transcript.substring(0, 500) + "...") : "No transcript available",
+                        key_points: ["Automatically generated summary"]
+                    }]
+                },
+                video_filename: responseData.video_filename || "video.mp4"
+            };
+
+            console.log('Generating PDF with data:', pdfData);
+
+            // Update progress
+            pdfProgressBar.style.width = '30%';
+            pdfProgressBar.textContent = '30%';
+
+            // Send request to generate PDF
+            const response = await fetch('/generate-pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(pdfData)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Server returned ${response.status}: ${errorText}`);
+            }
+
+            // Update progress
+            pdfProgressBar.style.width = '70%';
+            pdfProgressBar.textContent = '70%';
+
+            const result = await response.json();
+            console.log('PDF generation response:', result);
+
+            if (result.error) {
+                throw new Error(result.error);
+            }
+
+            if (!result.filename) {
+                throw new Error("No filename returned from server");
+            }
+
+            // Update progress
+            pdfProgressBar.style.width = '90%';
+            pdfProgressBar.textContent = '90%';
+
+            // Extract filename from result
+            const filename = result.filename;
+
+            // Create a direct download link instead of changing window location
+            const downloadLink = document.createElement('a');
+            downloadLink.href = `/download-pdf/${filename}`;
+            downloadLink.download = filename; // Suggest filename for download
+            downloadLink.style.display = 'none';
+            document.body.appendChild(downloadLink); // Must add to document
+            console.log('Initiating download for:', filename);
+            downloadLink.click();
+
+            // Clean up
+            setTimeout(() => {
+                document.body.removeChild(downloadLink);
+            }, 100);
+
+            // Complete progress
+            setTimeout(() => {
+                pdfProgressBar.style.width = '100%';
+                pdfProgressBar.textContent = '100%';
+
+                // Reset UI after a short delay
+                setTimeout(() => {
+                    downloadProgress.style.display = 'none';
+                    generatePdfBtn.disabled = false;
+                }, 1000);
+            }, 500);
+
+        } catch (err) {
+            console.error("PDF generation error:", err);
+            downloadProgress.style.display = 'none';
+            generatePdfBtn.disabled = false;
+
+            if (error) {
+                error.innerHTML = `<i class="fas fa-exclamation-circle"></i> Error generating PDF: ${err.message}`;
+                error.style.display = 'block';
+                setTimeout(() => { error.style.display = 'none'; }, 5000);
+            }
+        }
+    }
+    </script>
+</body>
+</html>
