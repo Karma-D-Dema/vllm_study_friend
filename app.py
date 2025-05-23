@@ -6,9 +6,9 @@ import json
 import re
 import traceback
 import subprocess
-import tempfile
 import io
 from datetime import datetime
+import time
 from transformers import pipeline, AutoTokenizer
 import whisper
 from reportlab.lib.pagesizes import letter
@@ -18,6 +18,15 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.units import inch
 from flask_cors import CORS  # Import CORS
 from flask import request, jsonify
+from rouge_bleu_evaluation import ContentVerificationSystem, verify_content_accuracy
+import json
+import requests
+import urllib.parse
+from urllib.parse import urlparse, unquote
+import tempfile
+import shutil
+import yt_dlp
+
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -467,8 +476,6 @@ Format as JSON with this exact structure:
             ]
         }
         return json.dumps(default_quiz)
-
-
 def process_video(video_path, video_filename=None):
     """
     Process a video file to extract transcript, generate summary, topic summary, and quiz.
@@ -536,8 +543,122 @@ def process_video(video_path, video_filename=None):
             "transcript": "",
             "summary": "",
             "topic_summary": {"title": "Error", "topics": []},
+            "quiz": json.dumps({"quiz": []})}
+
+
+def process_video_with_verification(video_path, video_filename=None):
+    """
+    Enhanced version of process_video that includes automatic content verification
+    """
+    try:
+        print(f"Processing video with verification: {video_filename}")
+
+        # ✅ FIXED: Call the ORIGINAL process_video function, not itself
+        results = process_video(video_path, video_filename)  # ← CHANGED THIS LINE
+
+        if "error" in results and results["error"]:
+            return results
+
+        print("Video processing completed, starting content verification...")
+
+        # Perform automatic content verification
+        verification = verify_content_accuracy(
+            results.get("transcript", ""),
+            results.get("summary", ""),
+            results.get("topic_summary", {})
+        )
+
+        # Add verification results to response
+        results["content_verification"] = verification
+
+        # Add quality flags based on verification
+        results["quality_flags"] = generate_quality_flags(verification)
+
+        # Log the verification results
+        log_verification_results(video_filename, verification)
+
+        print("Content verification completed")
+        return results
+
+    except Exception as e:
+        error_details = traceback.format_exc()
+        print(f"Error in enhanced video processing: {error_details}")
+        return {
+            "error": f"Error processing video with verification: {str(e)}",
+            "transcript": "",
+            "summary": "",
+            "topic_summary": {"title": "Error", "topics": []},
             "quiz": json.dumps({"quiz": []})
         }
+
+
+def generate_quality_flags(verification_result):
+    """
+    Generate quality flags based on verification results
+    """
+    flags = {
+        "overall_quality": "unknown",
+        "summary_quality": "unknown",
+        "topic_quality": "unknown",
+        "needs_review": False,
+        "potential_hallucinations": False,
+        "recommendations": []
+    }
+
+    try:
+        # Check overall assessment
+        overall = verification_result.get("overall_assessment", {})
+        quality_status = overall.get("quality_status", "UNKNOWN")
+
+        if quality_status == "HIGH_QUALITY":
+            flags["overall_quality"] = "high"
+        elif quality_status == "MODERATE_QUALITY":
+            flags["overall_quality"] = "moderate"
+        else:
+            flags["overall_quality"] = "low"
+            flags["needs_review"] = True
+            flags["potential_hallucinations"] = True
+
+        # Check summary quality
+        summary_eval = verification_result.get("summary_verification", {}).get("summary_evaluation", {})
+        summary_status = summary_eval.get("content_verification", {}).get("status", "UNKNOWN")
+
+        if summary_status == "VERIFIED":
+            flags["summary_quality"] = "verified"
+        elif summary_status == "PARTIALLY_VERIFIED":
+            flags["summary_quality"] = "partial"
+        else:
+            flags["summary_quality"] = "unverified"
+            flags["potential_hallucinations"] = True
+
+        # Check topic quality
+        topic_eval = verification_result.get("topic_verification", {})
+        avg_scores = topic_eval.get("average_topic_scores", {})
+        avg_rouge1 = avg_scores.get("avg_rouge_1_f1", 0)
+
+        if avg_rouge1 >= 0.25:
+            flags["topic_quality"] = "verified"
+        elif avg_rouge1 >= 0.15:
+            flags["topic_quality"] = "partial"
+        else:
+            flags["topic_quality"] = "unverified"
+            flags["potential_hallucinations"] = True
+
+        # Generate recommendations
+        if flags["potential_hallucinations"]:
+            flags["recommendations"].append("Manual review recommended - potential inaccuracies detected")
+
+        if flags["needs_review"]:
+            flags["recommendations"].append("Content partially verified - cross-check important claims")
+
+        if flags["overall_quality"] == "high":
+            flags["recommendations"].append("Content appears accurate and well-supported by source material")
+
+    except Exception as e:
+        print(f"Error generating quality flags: {e}")
+        flags["recommendations"].append("Error analyzing content quality")
+
+    return flags
 
 
 @app.route('/')
@@ -618,6 +739,18 @@ def analyze_video():
             "topic_summary": {"title": "Error", "topics": []},
             "quiz": json.dumps({"quiz": []})
         }), 500
+
+
+
+
+
+
+# At the very end of your file, before if __name__ == '__main__':
+# Add this to verify routes are registered:
+print("🚀 Registering Flask routes...")
+print(f"📍 Available routes will be:")
+for rule in app.url_map.iter_rules():
+    print(f"  {rule.endpoint}: {rule.rule} [{','.join(rule.methods)}]")
 
 
 @app.route('/generate-pdf', methods=['POST'])
@@ -808,7 +941,711 @@ Your response should be helpful, concise, and directly address the question. If 
         return jsonify({"error": f"Error processing your question: {str(e)}"}), 500
 
 
+def verify_content():
+    """
+    Verify content accuracy using ROUGE/BLEU metrics
+    """
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        # Extract content from request
+        transcript = data.get('transcript', '')
+        summary = data.get('summary', '')
+        topic_summary = data.get('topic_summary', {})
+
+        if not transcript:
+            return jsonify({"error": "Transcript is required for verification"}), 400
+
+        print(f"Starting content verification...")
+        print(f"Transcript length: {len(transcript)} characters")
+        print(f"Summary length: {len(summary)} characters")
+        print(f"Topics count: {len(topic_summary.get('topics', []))}")
+
+        # Perform verification
+        verification_result = verify_content_accuracy(transcript, summary, topic_summary)
+
+        print("Verification completed successfully")
+        return jsonify(verification_result)
+
+    except Exception as e:
+        error_details = traceback.format_exc()
+        print(f"Error in content verification: {error_details}")
+        return jsonify({
+            "error": f"Error verifying content: {str(e)}",
+            "details": error_details
+        }), 500
+
+
+# Additional utility functions for logging and monitoring
+def log_verification_results(video_filename, verification_results):
+    """
+    Log verification results for monitoring and analysis
+    """
+    try:
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "video_filename": video_filename,
+            "overall_quality": verification_results.get("overall_assessment", {}).get("quality_status", "Unknown"),
+            "summary_rouge_1": verification_results.get("summary_verification", {}).get("summary_evaluation", {}).get(
+                "rouge_1", {}).get("f1", 0),
+            "summary_rouge_2": verification_results.get("summary_verification", {}).get("summary_evaluation", {}).get(
+                "rouge_2", {}).get("f1", 0),
+            "avg_topic_rouge_1": verification_results.get("topic_verification", {}).get("average_topic_scores", {}).get(
+                "avg_rouge_1_f1", 0),
+            "needs_review": verification_results.get("overall_assessment", {}).get("quality_status") in [
+                "MODERATE_QUALITY", "LOW_QUALITY"]
+        }
+
+        # Log to file (you can also log to database)
+        log_file = "content_verification.log"
+        with open(log_file, 'a') as f:
+            f.write(json.dumps(log_entry) + "\n")
+
+        print(f"Verification results logged for {video_filename}")
+
+    except Exception as e:
+        print(f"Error logging verification results: {e}")
+
+
+def get_verification_statistics():
+    """
+    Get statistics from verification logs
+    """
+    try:
+        stats = {
+            "total_processed": 0,
+            "high_quality": 0,
+            "moderate_quality": 0,
+            "low_quality": 0,
+            "avg_rouge_1": 0,
+            "avg_rouge_2": 0,
+            "needs_review_count": 0
+        }
+
+        log_file = "content_verification.log"
+        if not os.path.exists(log_file):
+            return stats
+
+        rouge_1_scores = []
+        rouge_2_scores = []
+
+        with open(log_file, 'r') as f:
+            for line in f:
+                try:
+                    entry = json.loads(line.strip())
+                    stats["total_processed"] += 1
+
+                    quality = entry.get("overall_quality", "Unknown")
+                    if quality == "HIGH_QUALITY":
+                        stats["high_quality"] += 1
+                    elif quality == "MODERATE_QUALITY":
+                        stats["moderate_quality"] += 1
+                    elif quality == "LOW_QUALITY":
+                        stats["low_quality"] += 1
+
+                    if entry.get("needs_review", False):
+                        stats["needs_review_count"] += 1
+
+                    rouge_1_scores.append(entry.get("summary_rouge_1", 0))
+                    rouge_2_scores.append(entry.get("summary_rouge_2", 0))
+
+                except json.JSONDecodeError:
+                    continue
+
+        if rouge_1_scores:
+            stats["avg_rouge_1"] = round(sum(rouge_1_scores) / len(rouge_1_scores), 4)
+        if rouge_2_scores:
+            stats["avg_rouge_2"] = round(sum(rouge_2_scores) / len(rouge_2_scores), 4)
+
+        return stats
+
+    except Exception as e:
+        print(f"Error getting verification statistics: {e}")
+        return {"error": str(e)}
+
+
+@app.route('/verification-stats', methods=['GET'])
+def verification_statistics():
+    """
+    Get verification statistics endpoint
+    """
+    try:
+        stats = get_verification_statistics()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def download_video_from_url(video_url, max_size_mb=100):
+    """
+    Download video from URL and save to temporary file
+    """
+    try:
+        print(f"Downloading video from URL: {video_url}")
+
+        # Parse URL to get filename
+        parsed_url = urlparse(video_url)
+        original_filename = unquote(parsed_url.path.split('/')[-1])
+
+        # If no filename in URL, generate one
+        if not original_filename or '.' not in original_filename:
+            original_filename = f"video_{int(time.time())}.mp4"  # ← This should work now
+
+        # Rest of the function stays the same...
+        temp_dir = tempfile.gettempdir()
+        temp_file_path = os.path.join(temp_dir, f"download_{original_filename}")
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+
+        with requests.get(video_url, headers=headers, stream=True, timeout=30) as response:
+            response.raise_for_status()
+
+            # Check content length
+            content_length = response.headers.get('content-length')
+            if content_length:
+                size_mb = int(content_length) / (1024 * 1024)
+                if size_mb > max_size_mb:
+                    return None, None, False, f"File too large: {size_mb:.1f}MB (max: {max_size_mb}MB)"
+
+            # Download file
+            with open(temp_file_path, 'wb') as f:
+                downloaded_size = 0
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded_size += len(chunk)
+
+                        # Check size during download
+                        if downloaded_size > max_size_mb * 1024 * 1024:
+                            f.close()
+                            os.remove(temp_file_path)
+                            return None, None, False, f"File too large during download"
+
+        print(f"Successfully downloaded: {temp_file_path}")
+        return temp_file_path, original_filename, True, None
+
+    except requests.exceptions.RequestException as e:
+        return None, None, False, f"Download failed: {str(e)}"
+    except Exception as e:
+        return None, None, False, f"Unexpected error: {str(e)}"
+
+
+def download_youtube_audio(youtube_url, max_duration_minutes=20):
+    """
+    Download audio only from YouTube - Fast and reliable
+    """
+    try:
+        print(f"🎵 Downloading audio from YouTube: {youtube_url}")
+
+        temp_dir = tempfile.gettempdir()
+        timestamp = int(time.time())
+        output_template = os.path.join(temp_dir, f'yt_audio_{timestamp}.%(ext)s')
+
+        # Audio-only options - much faster and more reliable
+        ydl_opts = {
+            'format': 'bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio',  # Audio only, any format
+            'outtmpl': output_template,
+            'max_filesize': 25 * 1024 * 1024,  # 25MB limit for audio
+            'extract_flat': False,
+            'writeinfojson': False,
+            'writesubtitles': False,
+            'writeautomaticsub': False,
+            # Speed optimizations
+            'quiet': True,
+            'no_warnings': True,
+            'retries': 1,
+            'socket_timeout': 20,
+            'http_chunk_size': 512 * 1024,  # 512KB chunks
+        }
+
+        print("📡 Extracting video information...")
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Get video info first
+            info = ydl.extract_info(youtube_url, download=False)
+
+            # Check duration
+            duration = info.get('duration', 0)
+            title = info.get('title', 'YouTube Audio')[:50]  # Limit title length
+
+            print(f"📹 Video: {title}")
+            print(f"⏱️ Duration: {duration // 60}:{duration % 60:02d}")
+
+            if duration > max_duration_minutes * 60:
+                return None, None, False, f"Audio too long: {duration // 60}min (max: {max_duration_minutes}min)"
+
+            # Download audio
+            print("⬬ Starting audio download...")
+            start_time = time.time()
+
+            ydl.download([youtube_url])
+
+            download_time = time.time() - start_time
+            print(f"✅ Audio download completed in {download_time:.1f} seconds")
+
+            # Find the downloaded audio file
+            import glob
+            pattern = os.path.join(temp_dir, f'yt_audio_{timestamp}.*')
+            matches = glob.glob(pattern)
+
+            if matches:
+                audio_file = matches[0]
+                file_size = os.path.getsize(audio_file) / (1024 * 1024)  # MB
+                print(f"📁 Audio file: {audio_file}")
+                print(f"💾 Size: {file_size:.1f}MB")
+
+                return audio_file, title, True, None
+            else:
+                print("❌ Audio file not found after download")
+                return None, None, False, "Audio file not found after download"
+
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ YouTube audio download error: {error_msg}")
+
+        # Provide helpful error messages
+        if "Video unavailable" in error_msg:
+            return None, None, False, "Video is private, deleted, or not available in your region"
+        elif "Sign in to confirm your age" in error_msg:
+            return None, None, False, "Video is age-restricted. Try a different video"
+        elif "Private video" in error_msg:
+            return None, None, False, "Video is private. Try a public video"
+        else:
+            return None, None, False, f"Audio download failed: {error_msg}"
+
+
+def is_youtube_url(url):
+    """Check if URL is a YouTube URL"""
+    youtube_domains = ['youtube.com', 'youtu.be', 'www.youtube.com', 'm.youtube.com']
+    parsed = urlparse(url)
+    return any(domain in parsed.netloc.lower() for domain in youtube_domains)
+
+
+def is_valid_video_url(url):
+    """Basic validation for video URLs"""
+    try:
+        parsed = urlparse(url)
+        if not parsed.scheme in ['http', 'https']:
+            return False
+        if not parsed.netloc:
+            return False
+
+        # Check for common video file extensions in URL
+        video_extensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv']
+        url_lower = url.lower()
+
+        # YouTube URLs are valid even without file extensions
+        if is_youtube_url(url):
+            return True
+
+        # Check if URL ends with video extension
+        return any(url_lower.endswith(ext) for ext in video_extensions)
+
+    except Exception:
+        return False
+
+
+# New Flask route for URL processing
+@app.route('/analyze-url', methods=['POST'])
+@app.route('/analyze-url', methods=['POST'])
+def analyze_video_from_url():
+    """
+    Analyze video from URL - Now using audio-only for YouTube
+    """
+    try:
+        data = request.json
+        if not data or 'video_url' not in data:
+            return jsonify({
+                "error": "No video URL provided",
+                "transcript": "",
+                "summary": "",
+                "topic_summary": {"title": "Error", "topics": []},
+                "quiz": json.dumps({"quiz": []})
+            }), 400
+
+        video_url = data['video_url'].strip()
+
+        # Validate URL
+        if not is_valid_video_url(video_url):
+            return jsonify({
+                "error": "Invalid video URL format",
+                "transcript": "",
+                "summary": "",
+                "topic_summary": {"title": "Error", "topics": []},
+                "quiz": json.dumps({"quiz": []})
+            }), 400
+
+        print(f"🎯 Processing URL: {video_url}")
+
+        # Process based on URL type
+        if is_youtube_url(video_url):
+            # Use audio-only processing for YouTube
+            print("🎵 Using audio-only processing for YouTube")
+            results = process_youtube_audio(video_url)
+        else:
+            # Use video download for direct URLs
+            print("🎬 Using video download for direct URL")
+            temp_file_path, filename, success, error_msg = download_video_from_url(video_url)
+
+            if not success:
+                return jsonify({
+                    "error": f"Failed to download video: {error_msg}",
+                    "transcript": "",
+                    "summary": "",
+                    "topic_summary": {"title": "Error", "topics": []},
+                    "quiz": json.dumps({"quiz": []})
+                }), 400
+
+            try:
+                results = process_video_with_verification(temp_file_path, filename)
+
+                # Clean up
+                if os.path.exists(temp_file_path):
+                    os.remove(temp_file_path)
+
+            except Exception as e:
+                if temp_file_path and os.path.exists(temp_file_path):
+                    os.remove(temp_file_path)
+                raise e
+
+        # Add source URL to results
+        results["source_url"] = video_url
+        if "source_type" not in results:
+            results["source_type"] = "youtube" if is_youtube_url(video_url) else "direct_url"
+
+        # Add verification if not already present
+        if "content_verification" not in results and "error" not in results:
+            print("📊 Adding content verification...")
+            verification = verify_content_accuracy(
+                results.get("transcript", ""),
+                results.get("summary", ""),
+                results.get("topic_summary", {})
+            )
+            results["content_verification"] = verification
+            results["quality_flags"] = generate_quality_flags(verification)
+
+        return jsonify(results)
+
+    except Exception as e:
+        error_details = traceback.format_exc()
+        print(f"❌ Error in analyze_video_from_url: {error_details}")
+        return jsonify({
+            "error": f"Server error: {str(e)}",
+            "transcript": "",
+            "summary": "",
+            "topic_summary": {"title": "Error", "topics": []},
+            "quiz": json.dumps({"quiz": []})
+        }), 500
+
+
+def convert_audio_for_whisper(audio_path):
+    """
+    Convert downloaded audio to format suitable for Whisper
+    """
+    try:
+        print(f"🔄 Converting audio for Whisper: {audio_path}")
+
+        # Create output path for converted audio
+        temp_dir = tempfile.gettempdir()
+        converted_path = os.path.join(temp_dir, "whisper_audio.wav")
+
+        # Use FFmpeg to convert to WAV format (best for Whisper)
+        cmd = [
+            'ffmpeg', '-i', audio_path,
+            '-acodec', 'pcm_s16le',  # 16-bit PCM
+            '-ar', '16000',  # 16kHz sample rate
+            '-ac', '1',  # Mono
+            '-y',  # Overwrite output file
+            converted_path
+        ]
+
+        print("🎛️ Converting audio format...")
+        process = subprocess.run(cmd, capture_output=True, text=True)
+
+        if process.returncode != 0:
+            print(f"FFmpeg conversion error: {process.stderr}")
+            # If conversion fails, try using original file
+            print("⚠️ Conversion failed, using original audio file")
+            return audio_path
+
+        print(f"✅ Audio converted successfully: {converted_path}")
+        return converted_path
+
+    except Exception as e:
+        print(f"⚠️ Audio conversion error: {e}, using original file")
+        return audio_path
+
+
+def transcribe_youtube_audio(audio_path):
+    """
+    Transcribe audio using Whisper (optimized for YouTube audio)
+    """
+    try:
+        print(f"🎤 Transcribing audio: {audio_path}")
+
+        # Convert audio if needed
+        whisper_audio_path = convert_audio_for_whisper(audio_path)
+
+        # Load Whisper model
+        print("🧠 Loading Whisper model...")
+        model_size = "base"  # Good balance of speed and accuracy
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"🖥️ Using device: {device}")
+
+        model = whisper.load_model(model_size, device=device)
+
+        # Transcribe the audio
+        print("📝 Starting transcription...")
+        start_time = time.time()
+
+        result = model.transcribe(whisper_audio_path, language="en")  # Specify English for speed
+
+        transcription_time = time.time() - start_time
+        print(f"✅ Transcription completed in {transcription_time:.1f} seconds")
+
+        # Clean up converted audio file if it's different from original
+        if whisper_audio_path != audio_path and os.path.exists(whisper_audio_path):
+            os.remove(whisper_audio_path)
+            print("🗑️ Cleaned up converted audio file")
+
+        transcript_text = result["text"].strip()
+        print(f"📄 Transcript length: {len(transcript_text)} characters")
+
+        return transcript_text
+
+    except Exception as e:
+        error_details = traceback.format_exc()
+        print(f"❌ Transcription error: {error_details}")
+        return f"Failed to transcribe audio: {str(e)}"
+
+
+def process_youtube_audio(youtube_url):
+    """
+    Complete pipeline: Download YouTube audio -> Transcribe -> Generate content
+    """
+    try:
+        print(f"🚀 Starting YouTube audio processing pipeline for: {youtube_url}")
+
+        # Step 1: Download audio
+        audio_path, title, success, error_msg = download_youtube_audio(youtube_url)
+
+        if not success:
+            return {
+                "error": f"Audio download failed: {error_msg}",
+                "transcript": "",
+                "summary": "",
+                "topic_summary": {"title": "Error", "topics": []},
+                "quiz": json.dumps({"quiz": []})
+            }
+
+        print(f"✅ Audio downloaded: {title}")
+
+        try:
+            # Step 2: Transcribe audio
+            transcript = transcribe_youtube_audio(audio_path)
+
+            # Clean up audio file
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+                print(f"🗑️ Cleaned up audio file: {audio_path}")
+
+            if not transcript or len(transcript.strip()) < 10:
+                return {
+                    "error": "Could not transcribe audio or transcription too short",
+                    "transcript": transcript or "",
+                    "summary": "",
+                    "topic_summary": {"title": "Error", "topics": []},
+                    "quiz": json.dumps({"quiz": []})
+                }
+
+            # Step 3: Generate summary
+            print("📝 Generating summary...")
+            summary = generate_summary(transcript)
+
+            # Step 4: Generate topic-wise summary
+            print("📋 Generating topic summary...")
+            topic_summary = generate_topic_wise_summary(transcript)
+
+            # Step 5: Generate quiz
+            print("❓ Generating quiz...")
+            quiz = generate_quiz(transcript)
+
+            print("🎉 YouTube audio processing completed successfully!")
+
+            return {
+                "transcript": transcript,
+                "summary": summary,
+                "topic_summary": topic_summary,
+                "quiz": quiz,
+                "video_filename": f"{title}.mp3",
+                "source_type": "youtube_audio",
+                "processing_method": "audio_only"
+            }
+
+        except Exception as e:
+            # Clean up audio file on error
+            if audio_path and os.path.exists(audio_path):
+                os.remove(audio_path)
+
+            error_details = traceback.format_exc()
+            print(f"❌ Processing error: {error_details}")
+            return {
+                "error": f"Error processing audio: {str(e)}",
+                "transcript": "",
+                "summary": "",
+                "topic_summary": {"title": "Error", "topics": []},
+                "quiz": json.dumps({"quiz": []})
+            }
+
+    except Exception as e:
+        error_details = traceback.format_exc()
+        print(f"❌ Pipeline error: {error_details}")
+        return {
+            "error": f"YouTube processing failed: {str(e)}",
+            "transcript": "",
+            "summary": "",
+            "topic_summary": {"title": "Error", "topics": []},
+            "quiz": json.dumps({"quiz": []})
+        }
+
+
+# Update your analyze_video_from_url route to use audio processing
+
+# Route to validate video URL before processing
+@app.route('/validate-video-url', methods=['POST'])
+def validate_video_url():
+    """
+    Validate if a video URL is processable
+    """
+    try:
+        data = request.json
+        if not data or 'video_url' not in data:
+            return jsonify({"valid": False, "error": "No URL provided"}), 400
+
+        video_url = data['video_url'].strip()
+
+        # Basic validation
+        if not is_valid_video_url(video_url):
+            return jsonify({
+                "valid": False,
+                "error": "Invalid video URL format",
+                "supported_formats": ["Direct video URLs (.mp4, .avi, .mov, etc.)", "YouTube URLs"]
+            })
+
+        # Check if URL is accessible (HEAD request)
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+
+            if is_youtube_url(video_url):
+                # For YouTube, just check if it's a valid format
+                return jsonify({
+                    "valid": True,
+                    "url_type": "youtube",
+                    "note": "YouTube URL detected - will use yt-dlp for download"
+                })
+            else:
+                # For direct URLs, check accessibility
+                response = requests.head(video_url, headers=headers, timeout=10)
+                content_type = response.headers.get('content-type', '')
+                content_length = response.headers.get('content-length')
+
+                size_info = ""
+                if content_length:
+                    size_mb = int(content_length) / (1024 * 1024)
+                    size_info = f" (Size: {size_mb:.1f}MB)"
+
+                return jsonify({
+                    "valid": True,
+                    "url_type": "direct",
+                    "content_type": content_type,
+                    "note": f"Direct video URL{size_info}"
+                })
+
+        except requests.exceptions.RequestException as e:
+            return jsonify({
+                "valid": False,
+                "error": f"URL not accessible: {str(e)}"
+            })
+
+    except Exception as e:
+        return jsonify({
+            "valid": False,
+            "error": f"Validation error: {str(e)}"
+        }), 500
+
+
+# Combined route that handles both file upload and URL
+@app.route('/analyze-video', methods=['POST'])
+def analyze_video_combined():
+    """
+    Combined endpoint that handles both file uploads and URLs
+    """
+    try:
+        # Check if it's a file upload
+        if 'video' in request.files:
+            # Handle file upload (existing functionality)
+            video_file = request.files['video']
+            if video_file.filename == '':
+                return jsonify({"error": "Empty filename"}), 400
+
+            save_path = os.path.join(app.config['UPLOAD_FOLDER'], video_file.filename)
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+            video_file.save(save_path)
+
+            results = process_video_with_verification(save_path, video_file.filename)
+            results["source_type"] = "file_upload"
+            return jsonify(results)
+
+        # Check if it's a URL request
+        elif request.is_json:
+            data = request.json
+            if 'video_url' in data:
+                # Handle URL (redirect to URL handler)
+                return analyze_video_from_url()
+
+        return jsonify({"error": "No video file or URL provided"}), 400
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/debug-routes', methods=['GET'])
+def debug_routes():
+    """Debug route to see all available routes"""
+    import urllib
+    output = []
+    for rule in app.url_map.iter_rules():
+        methods = ','.join(rule.methods)
+        line = urllib.parse.unquote("{:50s} {:20s} {}".format(rule.endpoint, methods, rule))
+        output.append(line)
+
+    return jsonify({
+        "total_routes": len(output),
+        "routes": output
+    })
+
+
 if __name__ == '__main__':
+    # Test imports
+    try:
+        print("✅ Testing imports...")
+        print(f"time.time() = {time.time()}")
+        print(f"datetime.now() = {datetime.now()}")
+        print("✅ All imports working")
+    except Exception as e:
+        print(f"❌ Import error: {e}")
+
     # Ensure uploads directory exists
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+    print("🌐 Starting Flask app on http://localhost:5000")
+    print("🔍 Test endpoints:")
+    print("  GET  http://localhost:5000/test-connection")
+    print("  GET  http://localhost:5000/debug-routes")
+    print("  POST http://localhost:5000/analyze-url")
+
     app.run(host='0.0.0.0', port=5000, debug=True)
